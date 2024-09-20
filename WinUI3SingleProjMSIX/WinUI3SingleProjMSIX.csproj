@@ -1,0 +1,102 @@
+﻿<Project>
+    <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+    
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>WinUI3SingleProjMSIX</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &gt;= 8">win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &lt; 8">win10-x86;win10-x64;win10-arm64</RuntimeIdentifiers>
+    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsSdkPackageVersion>10.0.22621.39</WindowsSdkPackageVersion>
+    <PublishAot>true</PublishAot>
+      
+      
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+    <AppxSymbolPackageEnabled>true</AppxSymbolPackageEnabled>
+    <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <AppxBundle>Never</AppxBundle>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AdaptiveCards.Templating" Version="2.0.2" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.1.3" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.756" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.240829007" />
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+    
+    <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <!--Remove all managed payload from the app package for AOT publishing-->
+  <Target Name="WinAppSdkRemoveLinkedFilesFromPayload" BeforeTargets="_ComputeAppxPackagePayload" AfterTargets="GetPackagingOutputs;ComputeLinkedFilesToPublish" Condition="'$(PublishAot)'=='true'">
+    <ItemGroup Condition="'$(IncludePublishItemsOutputGroup)'=='true'">
+      <PackagingOutputs Remove="@(_AssembliesToSkipPublish)" />
+      <!-- Remove managed intermediate assembly if not split init (CustomNativeMain) -->
+      <PackagingOutputs Remove="@(BuiltProjectOutputGroupKeyOutput->'%(FinalOutputPath)')" Condition="'$(CustomNativeMain)'==''" />
+    </ItemGroup>
+  </Target>
+
+  <!--Remove conflicting managed apphost from the app package for AOT publishing-->
+  <Target Name="WindowsAppSdkRemoveLinkedAppHostFromPayload" AfterTargets="AssignTargetPaths" Condition="'$(PublishAot)'=='true' and '$(WindowsPackageType)' == 'MSIX'">
+    <ItemGroup Condition="'$(IncludePublishItemsOutputGroup)'=='true'">
+      <_NoneWithTargetPath Remove="$(AppHostIntermediatePath)" />
+    </ItemGroup>
+  </Target>
+
+    <PropertyGroup>
+        <!-- Turn off publishing for GetPackageOutputs by default so that dev inner loop creates a package layout but doesn't do .NET publish -->
+        <IncludePublishItemsOutputGroup>false</IncludePublishItemsOutputGroup>
+
+        <!-- This turns on publishing for the VS case where we enter on the target _GenerateAppxPackage (due to PackageAction=_GenerateAppxPackage) -->
+        <_GenerateAppxPackageDependsOn>TurnOnIncludePublishItemsOutputGroupDuringGenerateAppxPackage;$(_GenerateAppxPackageDependsOn)</_GenerateAppxPackageDependsOn>
+
+        <!-- This turns on publishing for the single-project MSIX publishing from the command line (where the docs tell you to
+             explicitly pass /p:GenerateAppxPackageOnBuild=true 
+             https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/single-project-msix?tabs=csharp#automate-building-and-packaging-your-single-project-msix-app              -->
+        <IncludePublishItemsOutputGroup Condition="'$(GenerateAppxPackageOnBuild)'=='true'">true</IncludePublishItemsOutputGroup>
+    </PropertyGroup>
+    <Target Name="TurnOnIncludePublishItemsOutputGroupDuringGenerateAppxPackage">
+        <PropertyGroup>
+            <IncludePublishItemsOutputGroup>true</IncludePublishItemsOutputGroup>
+        </PropertyGroup>        
+    </Target>
+
+</Project>
